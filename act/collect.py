@@ -159,7 +159,7 @@ def collect_information(args, ros_operator, voice_engine):
 
         # 检查是否超过100帧，并判断是否应该停止
         if count > 100:
-            if all(abs(val - init) <= 0.06 for val, init in zip(action, init_pos)):
+            if all(abs(val - init) <= 0.1 for val, init in zip(action, init_pos)):
                 break
 
         # 收集数据
