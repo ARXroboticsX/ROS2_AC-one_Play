@@ -435,113 +435,114 @@ def inference_process(args, config, shm_dict, shapes, ros_proc):
 
     max_publish_step = config['episode_len']
 
-    if config['temporal_agg']:
-        print(f"{config['state_dim']=}")
+    while ros_proc.is_alive():
+        if config['temporal_agg']:
+            print(f"{config['state_dim']=}")
 
-        all_time_actions = np.zeros((max_publish_step, max_publish_step + chunk_size, action_dim))
+            all_time_actions = np.zeros((max_publish_step, max_publish_step + chunk_size, action_dim))
 
-    timestep = 0
+        timestep = 0
 
-    with torch.inference_mode():
-        while timestep < args.max_publish_step and ros_proc.is_alive():
-            obs_dict = {"images": {}, "qpos": None, "qvel": None, "effort": None,
-                        "robot_base": None, "base_velocity": None}
+        with torch.inference_mode():
+            while timestep < args.max_publish_step and ros_proc.is_alive():
+                obs_dict = {"images": {}, "qpos": None, "qvel": None, "effort": None,
+                            "robot_base": None, "base_velocity": None}
 
-            # 从共享内存读取
-            for cam in args.camera_names:
-                shm, shape, dtype = shm_dict[cam]
-                obs_dict["images"][cam] = np.ndarray(shape, dtype=dtype, buffer=shm.buf).copy()
-            for state_key in shapes["states"]:
-                shm, shape, dtype = shm_dict[state_key]
-                obs_dict[state_key] = np.ndarray(shape, dtype=dtype, buffer=shm.buf).copy()
+                # 从共享内存读取
+                for cam in args.camera_names:
+                    shm, shape, dtype = shm_dict[cam]
+                    obs_dict["images"][cam] = np.ndarray(shape, dtype=dtype, buffer=shm.buf).copy()
+                for state_key in shapes["states"]:
+                    shm, shape, dtype = shm_dict[state_key]
+                    obs_dict[state_key] = np.ndarray(shape, dtype=dtype, buffer=shm.buf).copy()
 
-            gripper_idx = [6, 13]
+                gripper_idx = [6, 13]
 
-            left_qpos = obs_dict['eef'][:gripper_idx[0] + 1] if use_eef_states else obs_dict['qpos'][
-                :gripper_idx[0] + 1]
-            left_states = left_qpos
+                left_qpos = obs_dict['eef'][:gripper_idx[0] + 1] if use_eef_states else obs_dict['qpos'][
+                    :gripper_idx[0] + 1]
+                left_states = left_qpos
 
-            right_qpos = obs_dict['eef'][gripper_idx[0] + 1:gripper_idx[1] + 1] if use_eef_states \
-                else obs_dict['qpos'][gripper_idx[0] + 1:gripper_idx[1] + 1]
-            right_states = right_qpos
+                right_qpos = obs_dict['eef'][gripper_idx[0] + 1:gripper_idx[1] + 1] if use_eef_states \
+                    else obs_dict['qpos'][gripper_idx[0] + 1:gripper_idx[1] + 1]
+                right_states = right_qpos
 
-            left_states = np.concatenate((left_states, obs_dict['qvel'][:gripper_idx[0] + 1]),
-                                         axis=0) if use_qvel else left_states
-            left_states = np.concatenate((left_states, obs_dict['effort'][gripper_idx[0]:gripper_idx[0] + 1]),
-                                         axis=0) if use_effort else left_states
+                left_states = np.concatenate((left_states, obs_dict['qvel'][:gripper_idx[0] + 1]),
+                                             axis=0) if use_qvel else left_states
+                left_states = np.concatenate((left_states, obs_dict['effort'][gripper_idx[0]:gripper_idx[0] + 1]),
+                                             axis=0) if use_effort else left_states
 
-            right_states = np.concatenate(
-                (right_states, obs_dict['qvel'][gripper_idx[0] + 1:gripper_idx[1] + 1]),
-                axis=0) if use_qvel else right_states  #
-            right_states = np.concatenate(
-                (right_states, obs_dict['effort'][gripper_idx[1]:gripper_idx[1] + 1]),
-                axis=0) if use_effort else right_states  #
+                right_states = np.concatenate(
+                    (right_states, obs_dict['qvel'][gripper_idx[0] + 1:gripper_idx[1] + 1]),
+                    axis=0) if use_qvel else right_states  #
+                right_states = np.concatenate(
+                    (right_states, obs_dict['effort'][gripper_idx[1]:gripper_idx[1] + 1]),
+                    axis=0) if use_effort else right_states  #
 
-            left_states = np.concatenate((left_states, right_states), axis=0)
-            right_states = left_states
+                left_states = np.concatenate((left_states, right_states), axis=0)
+                right_states = left_states
 
-            robot_base = obs_dict['robot_base'][:3]
+                robot_base = obs_dict['robot_base'][:3]
 
-            robot_base = pre_robot_base_process(robot_base)
-            robot_base = torch.from_numpy(robot_base).float().cuda().unsqueeze(0)
+                robot_base = pre_robot_base_process(robot_base)
+                robot_base = torch.from_numpy(robot_base).float().cuda().unsqueeze(0)
 
-            robot_head = obs_dict['robot_base'][3:6]
-            robot_head = pre_robot_head_process(robot_head)
-            robot_head = torch.from_numpy(robot_head).float().cuda().unsqueeze(0)
+                robot_head = obs_dict['robot_base'][3:6]
+                robot_head = pre_robot_head_process(robot_head)
+                robot_head = torch.from_numpy(robot_head).float().cuda().unsqueeze(0)
 
-            base_velocity = obs_dict['base_velocity']
-            base_velocity = pre_base_velocity_process(base_velocity)
-            base_velocity = torch.from_numpy(base_velocity).float().cuda().unsqueeze(0)
+                base_velocity = obs_dict['base_velocity']
+                base_velocity = pre_base_velocity_process(base_velocity)
+                base_velocity = torch.from_numpy(base_velocity).float().cuda().unsqueeze(0)
 
-            left_states = pre_left_states_process(left_states)
-            left_states = torch.from_numpy(left_states).float().cuda().unsqueeze(0)
+                left_states = pre_left_states_process(left_states)
+                left_states = torch.from_numpy(left_states).float().cuda().unsqueeze(0)
 
-            right_states = pre_right_states_process(right_states)
-            right_states = torch.from_numpy(right_states).float().cuda().unsqueeze(0)
+                right_states = pre_right_states_process(right_states)
+                right_states = torch.from_numpy(right_states).float().cuda().unsqueeze(0)
 
-            curr_image = get_image(obs_dict, config['camera_names'])
-            curr_depth_image = None
+                curr_image = get_image(obs_dict, config['camera_names'])
+                curr_depth_image = None
 
-            if args.use_depth_image:
-                curr_depth_image = get_depth_image(obs_dict, config['camera_names'])
+                if args.use_depth_image:
+                    curr_depth_image = get_depth_image(obs_dict, config['camera_names'])
 
-            if config['policy_class'] == "ACT":
-                all_actions = model(curr_image, curr_depth_image, left_states, right_states,
-                                    robot_base=robot_base, robot_head=robot_head,
-                                    base_velocity=base_velocity)
+                if config['policy_class'] == "ACT":
+                    all_actions = model(curr_image, curr_depth_image, left_states, right_states,
+                                        robot_base=robot_base, robot_head=robot_head,
+                                        base_velocity=base_velocity)
 
-                if config['temporal_agg']:
-                    all_time_actions[[timestep], timestep:timestep + chunk_size] = all_actions.cpu().numpy()
+                    if config['temporal_agg']:
+                        all_time_actions[[timestep], timestep:timestep + chunk_size] = all_actions.cpu().numpy()
 
-                    actions_for_curr_step = all_time_actions[:, timestep]  # (10000,1,14) => (10000, 14)
-                    actions_populated = np.all(actions_for_curr_step != 0, axis=1)
-                    actions_for_curr_step = actions_for_curr_step[actions_populated]
+                        actions_for_curr_step = all_time_actions[:, timestep]  # (10000,1,14) => (10000, 14)
+                        actions_populated = np.all(actions_for_curr_step != 0, axis=1)
+                        actions_for_curr_step = actions_for_curr_step[actions_populated]
 
-                    k = 0.01
-                    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
-                    exp_weights = exp_weights / exp_weights.sum()
-                    exp_weights = exp_weights[:, np.newaxis]
-                    raw_action = (actions_for_curr_step * exp_weights).sum(axis=0, keepdims=True)
-                else:
-                    if args.pos_lookahead_step != 0:
-                        raw_action = all_actions[:, timestep % args.model.inference.pos_lookahead_step]
+                        k = 0.01
+                        exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                        exp_weights = exp_weights / exp_weights.sum()
+                        exp_weights = exp_weights[:, np.newaxis]
+                        raw_action = (actions_for_curr_step * exp_weights).sum(axis=0, keepdims=True)
                     else:
-                        raw_action = all_actions[:, timestep % chunk_size]
-            else:
-                raise NotImplementedError
+                        if args.pos_lookahead_step != 0:
+                            raw_action = all_actions[:, timestep % args.model.inference.pos_lookahead_step]
+                        else:
+                            raw_action = all_actions[:, timestep % chunk_size]
+                else:
+                    raise NotImplementedError
 
-            action = post_process(raw_action[0])
+                action = post_process(raw_action[0])
+
+                robot_action(action, shm_dict)
+
+                timestep += 1
+
+            if args.use_base:
+                action[16] = 0
+                action[17] = 0
+                action[19] = 0
 
             robot_action(action, shm_dict)
-
-            timestep += 1
-
-        if args.use_base:
-            action[16] = 0
-            action[17] = 0
-            action[19] = 0
-
-        robot_action(action, shm_dict)
 
 
 def parse_args(known=False):
