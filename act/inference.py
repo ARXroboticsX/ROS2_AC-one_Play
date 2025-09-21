@@ -32,6 +32,8 @@ from utils.setup_loader import setup_loader
 from functools import partial
 import signal
 import sys
+import time
+import math
 
 obs_dict = collections.OrderedDict()
 
@@ -263,12 +265,24 @@ def get_obervations(args, timestep, ros_operator):
         return obs_dict
 
 
+def move_to_target(ros_operator, target_pos, steps=50):
+    start = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    end = np.array(target_pos)
+
+    for i in range(steps):
+        t = i / (steps - 1)
+        s = (1 - math.cos(math.pi * t)) / 2
+        pos = start + (end - start) * s
+
+        ros_operator.follow_arm_publish_continuous(pos.tolist(), pos.tolist())
+
+
 def init_robot(ros_operator, use_base, connected_event, start_event):
     init0 = [0.0, 0.948, 0.858, -0.573, 0.0, 0.0, -2.8]
     init1 = [0.0, 0.948, 0.858, -0.573, 0.0, 0.0, 0.0]
 
     # 发布初始位置（关节空间姿态）
-    ros_operator.follow_arm_publish_continuous(init0, init0)
+    move_to_target(ros_operator, init0, steps=100)
     # ros_operator.robot_base_shutdown()
 
     connected_event.set()
