@@ -315,9 +315,6 @@ def cleanup_shm(names):
 
 
 def ros_process(args, config, meta_queue, connected_event, start_event, shm_ready_event):
-    def _ros_spin(executor):
-        executor.spin()
-
     setup_loader(ROOT)
 
     rclpy.init()
@@ -325,10 +322,11 @@ def ros_process(args, config, meta_queue, connected_event, start_event, shm_read
     data = load_yaml(args.data)
     ros_operator = RosOperator(args, data, in_collect=False)
 
-    executor = MultiThreadedExecutor()
-    executor.add_node(ros_operator)
+    def _spin_loop(node):
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.001)
 
-    spin_thread = threading.Thread(target=_ros_spin, args=(executor,), daemon=True)
+    spin_thread = threading.Thread(target=_spin_loop, args=(ros_operator,), daemon=True)
     spin_thread.start()
 
     if args.use_base:

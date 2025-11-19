@@ -324,7 +324,11 @@ def main(args):
 
     ros_operator = RosOperator(args, config, in_collect=True)
 
-    spin_thread = threading.Thread(target=rclpy.spin, args=(ros_operator,), daemon=True)
+    def _spin_loop(node):
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.001)
+
+    spin_thread = threading.Thread(target=_spin_loop, args=(ros_operator,), daemon=True)
     spin_thread.start()
 
     datasets_dir = args.datasets if sys.stdin.isatty() else Path.joinpath(ROOT, args.datasets)
