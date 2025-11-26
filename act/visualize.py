@@ -42,7 +42,7 @@ def load_hdf5(dataset_name):
 
     with h5py.File(dataset_path, 'r') as root:
         is_sim = root.attrs['sim']
-        is_compressed = root.attrs.get('compress', False)
+        is_compressed = root.attrs.get('compress', True)
         qpos = root['/observations/qpos'][()]
         qvel = root['/observations/qvel'][()]
         eef = root['/observations/eef'][()]
