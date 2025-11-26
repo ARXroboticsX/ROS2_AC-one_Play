@@ -379,8 +379,8 @@ class RosOperator(Node):
             if len(self.feedback_left_arm_deque) != 0:
                 left_arm = list(self.feedback_left_arm_deque[-1].joint_pos)
 
-            if len(self.feedback_left_arm_deque) != 0:
-                right_arm = list(self.feedback_left_arm_deque[-1].joint_pos)
+            if len(self.feedback_right_arm_deque) != 0:
+                right_arm = list(self.feedback_right_arm_deque[-1].joint_pos)
 
             if left_arm is not None and right_arm is not None:
                 break
